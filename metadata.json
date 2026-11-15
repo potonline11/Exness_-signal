@@ -1,0 +1,6 @@
+{
+  "name": "Exness XAUUSD Scalping AutoTrade Pro",
+  "description": "ระบบเทรดทองคำ XAUUSD Scalping ความแม่นยำสูงสำหรับบัญชี Exness วิเคราะห์ความสอดคล้องปัจจัยเทคนิค Confluence เกิน 90% แจ้งเตือน LINE Notify สั่งออเดอร์มิลลิวินาที และบริหารความเสี่ยงเข้มงวด SL <= 5% TP ~10%",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
