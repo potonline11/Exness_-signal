@@ -13,13 +13,11 @@ import {
   TradeSignal,
   HTFTrendContext,
   AntiSpamStatus,
-  LineEnvStatus,
   TelegramEnvStatus
 } from './types/trading';
 import {
   computeAllIndicators,
   evaluateConfluence,
-  formatLineNotifyMessage,
   formatTelegramSignalMessage
 } from './utils/technicalAnalysis';
 import { updateCandleWithTick, playAlertSound } from './utils/marketSimulator';
@@ -28,20 +26,18 @@ import { TradingChart } from './components/TradingChart';
 import { ConfluencePanel } from './components/ConfluencePanel';
 import { RiskManagementPanel } from './components/RiskManagementPanel';
 import { PositionsAndHistory } from './components/PositionsAndHistory';
-import { LineNotifyModal } from './components/LineNotifyModal';
+import { TelegramNotifyModal } from './components/TelegramNotifyModal';
 import { ExnessBridgeModal } from './components/ExnessBridgeModal';
 import { ExnessSignalStation } from './components/ExnessSignalStation';
 
 export default function App() {
   // Navigation & Modals
   const [activeTab, setActiveTab] = useState<'terminal' | 'signal-station' | 'confluence' | 'history' | 'mql5'>('terminal');
-  const [isLineModalOpen, setIsLineModalOpen] = useState(false);
+  const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
   const [isBridgeModalOpen, setIsBridgeModalOpen] = useState(false);
 
   // User Settings
   const [settings, setSettings] = useState<UserSettings>(() => {
-    const savedToken = localStorage.getItem('exness_line_channel_token') || localStorage.getItem('exness_line_token') || '';
-    const savedUserId = localStorage.getItem('exness_line_user_id') || '';
     const savedTgToken = localStorage.getItem('exness_tg_bot_token') || '';
     const savedTgChatId = localStorage.getItem('exness_tg_chat_id') || '';
     const savedOffset = parseFloat(localStorage.getItem('exness_price_offset') || '0') || 0;
@@ -78,14 +74,10 @@ export default function App() {
       autoBreakevenTriggerPips: 15,
       trailingStopEnabled: false,
       trailingStopDistancePips: 20,
-      lineChannelAccessToken: savedToken,
-      lineUserId: savedUserId,
-      lineNotifyToken: savedToken,
-      lineNotifyEnabled: true,
       telegramBotToken: savedTgToken,
       telegramChatId: savedTgChatId,
       telegramEnabled: true,
-      autoSendSignalToLine: true, // Auto dispatch signal when Layer 1 & Layer 2 pass
+      autoSendSignalToTelegram: true, // Auto dispatch signal to Telegram when Layer 1 & Layer 2 pass
       soundEnabled: true,
       showIndicators: {
         ema: true,
@@ -103,9 +95,6 @@ export default function App() {
         ...defaults.showIndicators,
         ...(savedBulk.showIndicators || {})
       },
-      lineChannelAccessToken: savedToken,
-      lineUserId: savedUserId,
-      lineNotifyToken: savedToken,
       telegramBotToken: savedTgToken,
       telegramChatId: savedTgChatId
     };
@@ -139,12 +128,6 @@ export default function App() {
   const [marketSource, setMarketSource] = useState<string>('กำลังเชื่อมต่อ...');
   const [isLoadingMarket, setIsLoadingMarket] = useState<boolean>(true);
   const [htfContext, setHtfContext] = useState<HTFTrendContext | undefined>(undefined);
-  const [lineEnvStatus, setLineEnvStatus] = useState<LineEnvStatus>({
-    hasEnvToken: false,
-    hasEnvUserId: false,
-    configuredViaEnv: false,
-    maskedUserId: ''
-  });
   const [telegramEnvStatus, setTelegramEnvStatus] = useState<TelegramEnvStatus>({
     hasEnvBotToken: false,
     hasEnvChatId: false,
@@ -152,15 +135,9 @@ export default function App() {
     maskedChatId: ''
   });
 
-  const refreshLineEnvStatus = async () => {
+  const refreshTelegramEnvStatus = async () => {
     try {
-      const [lineRes, tgRes] = await Promise.all([
-        fetch('/api/line-messaging/status'),
-        fetch('/api/telegram/status')
-      ]);
-      if (lineRes.ok) {
-        setLineEnvStatus(await lineRes.json());
-      }
+      const tgRes = await fetch('/api/telegram/status');
       if (tgRes.ok) {
         setTelegramEnvStatus(await tgRes.json());
       }
@@ -170,7 +147,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    refreshLineEnvStatus();
+    refreshTelegramEnvStatus();
   }, []);
 
   // Apply Exness price calibration offset cleanly to candles and live bid/ask
@@ -250,7 +227,7 @@ export default function App() {
   // Compute Anti-Spam Gatekeeper Status
   const antiSpam: AntiSpamStatus = useMemo(() => {
     const todayStr = new Date().toDateString();
-    const signalsSentToday = signals.filter(s => s.sentToLine && new Date(s.timestamp).toDateString() === todayStr).length;
+    const signalsSentToday = signals.filter(s => s.sentToTelegram && new Date(s.timestamp).toDateString() === todayStr).length;
 
     const cooldownMs = settings.signalCooldownMinutes * 60 * 1000;
     const elapsedMs = lastAutoSignal ? nowTick - lastAutoSignal.timestamp : Infinity;
@@ -369,9 +346,9 @@ export default function App() {
       playAlertSound('ORDER_FILLED');
     }
 
-    // Send LINE Notify alert on trade execution
-    if (settings.lineNotifyEnabled) {
-      sendLineAlert(type, confluence, newPosition);
+    // Send Telegram alert on trade execution
+    if (settings.telegramEnabled) {
+      sendTelegramAlert(type, confluence, newPosition, true);
     }
   };
 
@@ -498,7 +475,6 @@ export default function App() {
           grade: conf.grade === 'WAIT' ? 'A+' : conf.grade,
           lotSize: pos ? pos.lots : settings.fixedLotSize,
           status: 'ACTIVE',
-          sentToLine: false,
           sentToTelegram: Boolean(data.success)
         };
         setSignals(prev => [newSignal, ...prev.slice(0, 30)]);
@@ -509,85 +485,6 @@ export default function App() {
       console.error('Error dispatching Telegram alert:', e);
       return { success: false, message: e.message || 'ไม่สามารถเชื่อมต่อ Telegram ได้' };
     }
-  };
-
-  // Send LINE Alert via Backend Proxy & optionally Telegram Group together
-  const sendLineAlert = async (
-    direction: OrderType,
-    conf: ConfluenceResult,
-    pos?: Position,
-    alsoSendTelegram: boolean = false
-  ): Promise<boolean> => {
-    const message = formatLineNotifyMessage(
-      direction,
-      conf,
-      account.accountNumber,
-      pos ? pos.lots : settings.fixedLotSize,
-      settings.symbol,
-      htfContext
-    );
-
-    let lineOk = false;
-    try {
-      const res = await fetch('/api/line-messaging/push', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          channelAccessToken: settings.lineChannelAccessToken || settings.lineNotifyToken,
-          userId: settings.lineUserId,
-          message
-        })
-      });
-
-      const data = await res.json();
-      lineOk = Boolean(data.success);
-      const notif: NotificationLog = {
-        id: 'notif_' + Date.now(),
-        timestamp: new Date().toISOString(),
-        title: `${direction === 'BUY' ? '🟢' : '🔴'} ${settings.symbol} ${direction} Sniper Signal (${conf.totalScore}% / S2:${conf.layer2?.sniperScore ?? 90}%)`,
-        message,
-        type: direction === 'BUY' ? 'SIGNAL_BUY' : 'SIGNAL_SELL',
-        channel: 'LINE',
-        success: lineOk
-      };
-
-      setNotificationLogs(prev => [notif, ...prev.slice(0, 40)]);
-    } catch (e) {
-      console.error('Error dispatching LINE alert:', e);
-    }
-
-    let tgOk = false;
-    const isTelegramConfigured = Boolean(
-      (settings.telegramBotToken && settings.telegramChatId) || telegramEnvStatus.configuredViaEnv
-    );
-    if (alsoSendTelegram && settings.telegramEnabled && isTelegramConfigured) {
-      const tgRes = await sendTelegramAlert(direction, conf, pos, false);
-      tgOk = tgRes.success;
-    }
-
-    // Save unified entry to Signal History
-    const newSignal: TradeSignal = {
-      id: 'sig_' + Date.now(),
-      timestamp: Date.now(),
-      type: direction,
-      symbol: settings.symbol,
-      entryPrice: conf.suggestedEntry,
-      sl: conf.suggestedSl,
-      tp: conf.suggestedTp,
-      slPips: conf.slPips,
-      tpPips: conf.tpPips,
-      rrRatio: conf.rrRatio,
-      confluenceScore: conf.totalScore,
-      sniperScore: conf.layer2?.sniperScore,
-      grade: conf.grade === 'WAIT' ? 'A+' : conf.grade,
-      lotSize: pos ? pos.lots : settings.fixedLotSize,
-      status: 'ACTIVE',
-      sentToLine: lineOk,
-      sentToTelegram: tgOk
-    };
-    setSignals(prev => [newSignal, ...prev.slice(0, 30)]);
-
-    return lineOk;
   };
 
   // Test Signal Dispatch using ACTUAL live market price (no fake base price!)
@@ -624,8 +521,8 @@ export default function App() {
       rrRatio: Number((settings.tpPipsDefault / settings.slPipsDefault).toFixed(2))
     };
 
-    // Send live price signal to LINE and Telegram Group (if enabled)
-    sendLineAlert(dir, testConfluence, undefined, true);
+    // Send live price signal to Telegram Group
+    sendTelegramAlert(dir, testConfluence, undefined, true);
   };
 
   // Fetch initial real OHLCV candles when timeframe changes
@@ -756,14 +653,15 @@ export default function App() {
           return updatedPositions;
         });
 
-        // Automated Signal Dispatch to LINE:
+        // Automated Signal Dispatch to Telegram:
         // Requires Layer 1 (Confluence > 90%) + Layer 2 (Sniper High-Profit Filter) + Anti-Spam & Wave Lock
         const passesLayer1 = confluence.meetsThreshold && confluence.direction !== 'NEUTRAL';
         const passesLayer2 = !settings.sniperFilterEnabled || Boolean(confluence.layer2?.passed);
         const cooldownMs = settings.signalCooldownMinutes * 60 * 1000;
 
         if (
-          settings.autoSendSignalToLine &&
+          settings.autoSendSignalToTelegram &&
+          settings.telegramEnabled &&
           passesLayer1 &&
           passesLayer2 &&
           antiSpam.canSend &&
@@ -781,7 +679,7 @@ export default function App() {
           });
 
           if (settings.soundEnabled) playAlertSound('ALERT_CONFLUENCE');
-          sendLineAlert(confluence.direction as OrderType, confluence, undefined, true);
+          sendTelegramAlert(confluence.direction as OrderType, confluence, undefined, true);
 
           if (settings.autoTrade && positions.length < settings.maxOpenPositions) {
             handleExecuteTrade(
@@ -801,15 +699,6 @@ export default function App() {
   const handleUpdateSettings = (partial: Partial<UserSettings>) => {
     setSettings(prev => {
       const next = { ...prev, ...partial };
-      if (partial.lineChannelAccessToken !== undefined) {
-        localStorage.setItem('exness_line_channel_token', partial.lineChannelAccessToken);
-      }
-      if (partial.lineUserId !== undefined) {
-        localStorage.setItem('exness_line_user_id', partial.lineUserId);
-      }
-      if (partial.lineNotifyToken !== undefined) {
-        localStorage.setItem('exness_line_token', partial.lineNotifyToken);
-      }
       if (partial.priceOffset !== undefined) {
         localStorage.setItem('exness_price_offset', String(partial.priceOffset));
       }
@@ -830,9 +719,6 @@ export default function App() {
       }
       try {
         const {
-          lineChannelAccessToken: _t,
-          lineUserId: _u,
-          lineNotifyToken: _nt,
           telegramBotToken: _tgt,
           telegramChatId: _tgc,
           ...persistable
@@ -855,7 +741,7 @@ export default function App() {
         }
       };
       try {
-        const { lineChannelAccessToken: _t, lineUserId: _u, lineNotifyToken: _nt, ...persistable } = next;
+        const { telegramBotToken: _tgt, telegramChatId: _tgc, ...persistable } = next;
         localStorage.setItem('exness_user_settings_v2', JSON.stringify(persistable));
       } catch {
         // Ignore storage quota errors
@@ -871,9 +757,9 @@ export default function App() {
         account={account}
         settings={settings}
         onUpdateSettings={handleUpdateSettings}
-        onOpenLineModal={() => {
-          refreshLineEnvStatus();
-          setIsLineModalOpen(true);
+        onOpenTelegramModal={() => {
+          refreshTelegramEnvStatus();
+          setIsTelegramModalOpen(true);
         }}
         onOpenBridgeModal={() => setIsBridgeModalOpen(true)}
         onOpenRiskSettings={() => setActiveTab('terminal')}
@@ -882,7 +768,6 @@ export default function App() {
         bid={bid}
         ask={ask}
         spreadPips={spreadPips}
-        lineEnvStatus={lineEnvStatus}
         telegramEnvStatus={telegramEnvStatus}
       />
 
@@ -891,13 +776,12 @@ export default function App() {
         {/* VIEW 1: Main Terminal & Chart */}
         {activeTab === 'terminal' && (
           <div className="space-y-4">
-            {/* Exness Signal Copy Station & LINE / Telegram Dispatch Banner */}
+            {/* Exness Signal Copy Station & Telegram Group Dispatch Banner */}
             <ExnessSignalStation
               confluence={confluence}
               signals={signals}
               settings={settings}
               onUpdateSettings={handleUpdateSettings}
-              onSendSignalToLine={(dir, conf) => sendLineAlert(dir, conf)}
               onSendSignalToTelegram={async (dir, conf) => (await sendTelegramAlert(dir, conf, undefined, true)).success}
               onSimulateSignal={handleSimulateHighConfluence}
               bid={bid}
@@ -936,7 +820,7 @@ export default function App() {
                   settings={settings}
                   onUpdateSettings={handleUpdateSettings}
                   onExecuteTrade={handleExecuteTrade}
-                  onSendLineNotify={(dir, conf) => sendLineAlert(dir, conf)}
+                  onSendTelegramNotify={(dir, conf) => sendTelegramAlert(dir, conf, undefined, true)}
                   onSimulateHighConfluence={handleSimulateHighConfluence}
                   bid={bid}
                   ask={ask}
@@ -973,7 +857,6 @@ export default function App() {
               signals={signals}
               settings={settings}
               onUpdateSettings={handleUpdateSettings}
-              onSendSignalToLine={(dir, conf) => sendLineAlert(dir, conf)}
               onSendSignalToTelegram={async (dir, conf) => (await sendTelegramAlert(dir, conf, undefined, true)).success}
               onSimulateSignal={handleSimulateHighConfluence}
               bid={bid}
@@ -995,7 +878,7 @@ export default function App() {
               settings={settings}
               onUpdateSettings={handleUpdateSettings}
               onExecuteTrade={handleExecuteTrade}
-              onSendLineNotify={(dir, conf) => sendLineAlert(dir, conf)}
+              onSendTelegramNotify={(dir, conf) => sendTelegramAlert(dir, conf, undefined, true)}
               onSimulateHighConfluence={handleSimulateHighConfluence}
               bid={bid}
               ask={ask}
@@ -1106,13 +989,10 @@ export default function App() {
         )}
       </main>
 
-      {/* LINE Messaging API & Telegram Group Bot Modal */}
-      <LineNotifyModal
-        isOpen={isLineModalOpen}
-        onClose={() => setIsLineModalOpen(false)}
-        channelAccessToken={settings.lineChannelAccessToken}
-        userId={settings.lineUserId}
-        onSaveCredentials={(token, uid) => handleUpdateSettings({ lineChannelAccessToken: token, lineUserId: uid })}
+      {/* Telegram Group Bot Modal */}
+      <TelegramNotifyModal
+        isOpen={isTelegramModalOpen}
+        onClose={() => setIsTelegramModalOpen(false)}
         telegramBotToken={settings.telegramBotToken}
         telegramChatId={settings.telegramChatId}
         telegramEnabled={settings.telegramEnabled}
@@ -1120,12 +1000,10 @@ export default function App() {
           handleUpdateSettings({ telegramBotToken: botToken, telegramChatId: chatId, telegramEnabled: enabled })
         }
         notificationLogs={notificationLogs}
-        onSendTestNotification={() => sendLineAlert('BUY', confluence)}
         onSendTestTelegram={() => sendTelegramAlert('BUY', confluence, undefined, true)}
         confluencePreview={confluence}
-        lineEnvStatus={lineEnvStatus}
         telegramEnvStatus={telegramEnvStatus}
-        onRefreshEnvStatus={refreshLineEnvStatus}
+        onRefreshEnvStatus={refreshTelegramEnvStatus}
       />
 
       {/* Exness MT5 Bridge Modal */}

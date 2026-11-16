@@ -27,7 +27,6 @@ interface ExnessSignalStationProps {
   signals: TradeSignal[];
   settings: UserSettings;
   onUpdateSettings: (settings: Partial<UserSettings>) => void;
-  onSendSignalToLine: (direction: OrderType, confluence: ConfluenceResult) => Promise<boolean>;
   onSendSignalToTelegram: (direction: OrderType, confluence: ConfluenceResult) => Promise<boolean>;
   onSimulateSignal: () => void;
   bid: number;
@@ -44,7 +43,6 @@ export const ExnessSignalStation: React.FC<ExnessSignalStationProps> = ({
   signals,
   settings,
   onUpdateSettings,
-  onSendSignalToLine,
   onSendSignalToTelegram,
   onSimulateSignal,
   bid,
@@ -56,8 +54,6 @@ export const ExnessSignalStation: React.FC<ExnessSignalStationProps> = ({
   onResetWaveLock
 }) => {
   const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [isSending, setIsSending] = useState<boolean>(false);
-  const [sendSuccess, setSendSuccess] = useState<boolean | null>(null);
   const [isSendingTg, setIsSendingTg] = useState<boolean>(false);
   const [sendTgSuccess, setSendTgSuccess] = useState<boolean | null>(null);
   const [exnessRefPrice, setExnessRefPrice] = useState<string>('');
@@ -82,20 +78,6 @@ SL: ${slPrice.toFixed(3)}
 TP: ${tpPrice.toFixed(3)}
 Lot: ${lotSize}`;
     copyToClipboard(fullText, 'ALL');
-  };
-
-  const handleManualPushToLine = async () => {
-    setIsSending(true);
-    setSendSuccess(null);
-    try {
-      const ok = await onSendSignalToLine(activeDirection, confluence);
-      setSendSuccess(ok);
-      setTimeout(() => setSendSuccess(null), 3000);
-    } catch {
-      setSendSuccess(false);
-    } finally {
-      setIsSending(false);
-    }
   };
 
   const handleManualPushToTelegram = async () => {
@@ -135,7 +117,7 @@ Lot: ${lotSize}`;
             </div>
             <div>
               <h2 className="text-sm font-bold text-slate-100 flex flex-wrap items-center gap-2">
-                <span>Exness Signal Station (วิเคราะห์ &gt; ส่งเข้า LINE &gt; นำไปวางใน Exness)</span>
+                <span>Exness Signal Station (วิเคราะห์ &gt; ส่งเข้า Telegram &gt; นำไปวางใน Exness)</span>
                 <span className="text-[10px] font-mono-numbers px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
                   <Radio className="w-3 h-3" />
                   <span>{marketSource}</span>
@@ -185,17 +167,17 @@ Lot: ${lotSize}`;
 
             {/* Auto Send Toggle */}
             <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800">
-              <span className="text-[11px] text-slate-300 font-medium">ส่ง LINE / TG อัตโนมัติ:</span>
+              <span className="text-[11px] text-slate-300 font-medium">ส่ง Telegram อัตโนมัติ:</span>
               <button
-                onClick={() => onUpdateSettings({ autoSendSignalToLine: !settings.autoSendSignalToLine })}
+                onClick={() => onUpdateSettings({ autoSendSignalToTelegram: !settings.autoSendSignalToTelegram })}
                 className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                  settings.autoSendSignalToLine
-                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                  settings.autoSendSignalToTelegram
+                    ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30'
                     : 'bg-slate-800 text-slate-400'
                 }`}
               >
-                <span className={`w-2 h-2 rounded-full ${settings.autoSendSignalToLine ? 'bg-emerald-400' : 'bg-slate-600'}`} />
-                <span>{settings.autoSendSignalToLine ? 'เปิด (Auto-Send ON)' : 'ปิด (Manual)'}</span>
+                <span className={`w-2 h-2 rounded-full ${settings.autoSendSignalToTelegram ? 'bg-sky-400' : 'bg-slate-600'}`} />
+                <span>{settings.autoSendSignalToTelegram ? 'เปิด (Auto-Send ON)' : 'ปิด (Manual)'}</span>
               </button>
             </div>
           </div>
@@ -433,10 +415,10 @@ Lot: ${lotSize}`;
             <button
               onClick={onSimulateSignal}
               className="text-xs px-2.5 py-1 rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-colors cursor-pointer flex items-center gap-1.5 font-medium"
-              title="ส่ง Signal ทดสอบด้วยราคาตลาดจริงปัจจุบันเข้า LINE"
+              title="ส่ง Signal ทดสอบด้วยราคาตลาดจริงปัจจุบันเข้ากลุ่ม Telegram"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>ทดสอบส่ง Signal ราคาจริงเข้า LINE</span>
+              <span>ทดสอบส่ง Signal ราคาจริงเข้า Telegram</span>
             </button>
           </div>
 
@@ -520,16 +502,6 @@ Lot: ${lotSize}`;
                 <span>{copiedField === 'ALL' ? 'คัดลอกชุดตัวเลขทั้งหมดแล้ว!' : 'คัดลอกชุดคำสั่งทั้งหมด (Copy All)'}</span>
               </button>
 
-              {/* Push to LINE button */}
-              <button
-                onClick={handleManualPushToLine}
-                disabled={isSending || entryPrice <= 0}
-                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white font-bold text-xs rounded-lg transition-all shadow-sm cursor-pointer flex items-center gap-1.5"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>{isSending ? 'กำลังส่ง LINE...' : 'ส่งเข้า LINE'}</span>
-              </button>
-
               {/* Push to Telegram Group button */}
               <button
                 onClick={handleManualPushToTelegram}
@@ -540,11 +512,6 @@ Lot: ${lotSize}`;
                 <span>{isSendingTg ? 'กำลังส่ง Telegram...' : 'ส่งเข้ากลุ่ม Telegram'}</span>
               </button>
 
-              {sendSuccess !== null && (
-                <span className={`text-xs font-semibold ${sendSuccess ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {sendSuccess ? '✓ ส่งเข้า LINE เรียบร้อย' : '✕ ส่ง LINE ไม่สำเร็จ'}
-                </span>
-              )}
               {sendTgSuccess !== null && (
                 <span className={`text-xs font-semibold ${sendTgSuccess ? 'text-sky-400' : 'text-rose-400'}`}>
                   {sendTgSuccess ? '✓ ส่งเข้ากลุ่ม Telegram เรียบร้อย' : '✕ ส่ง Telegram ไม่สำเร็จ'}
@@ -570,7 +537,7 @@ Lot: ${lotSize}`;
           <div className="flex items-center justify-between text-xs text-slate-300 px-0.5">
             <span className="font-semibold flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-slate-400" />
-              <span>ประวัติ Signal ที่วิเคราะห์และส่งเข้า LINE (Signal History)</span>
+              <span>ประวัติ Signal ที่วิเคราะห์และส่งเข้ากลุ่ม Telegram (Signal History)</span>
             </span>
             <span className="text-slate-500 font-mono-numbers">{signals.length} รายการ</span>
           </div>
@@ -624,17 +591,11 @@ Lot: ${lotSize}`;
 
                       <td className="py-2.5 px-3 text-center">
                         <div className="inline-flex items-center gap-1">
-                          {sig.sentToLine && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                              ✓ LINE
-                            </span>
-                          )}
-                          {sig.sentToTelegram && (
+                          {sig.sentToTelegram ? (
                             <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-sky-500/15 text-sky-400 border border-sky-500/30">
-                              ✓ TG
+                              ✓ Telegram
                             </span>
-                          )}
-                          {!sig.sentToLine && !sig.sentToTelegram && (
+                          ) : (
                             <span className="text-[10px] text-slate-500">-</span>
                           )}
                         </div>

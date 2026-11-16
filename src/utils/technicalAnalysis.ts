@@ -1,4 +1,4 @@
-import {
+import type {
   Candle,
   IndicatorValues,
   ConfluenceCriterion,
@@ -909,51 +909,6 @@ export function evaluateConfluence(
     tpTargetPercent: options?.tpTargetPercent ?? 9.8, // ~10%
     layer2
   };
-}
-
-/**
- * Format LINE Messaging API alert message string
- */
-export function formatLineNotifyMessage(
-  direction: 'BUY' | 'SELL',
-  confluence: ConfluenceResult,
-  accountNumber: string = 'EX-7829104',
-  lotSize: number = 0.01,
-  symbol: string = 'XAUUSDc',
-  htfContext?: HTFTrendContext
-): string {
-  const dateStr = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
-  const dirEmoji = direction === 'BUY' ? '🟢 BUY (LONG)' : '🔴 SELL (SHORT)';
-  const sniperScore = confluence.layer2?.sniperScore ?? 90;
-  const profitGrade = confluence.layer2?.profitGrade ?? 'A++ SNIPER';
-  const clearance = confluence.layer2?.clearancePips ?? confluence.tpPips;
-  const htfSummary = htfContext
-    ? `M15: ${htfContext.m15Trend} | H1: ${htfContext.h1Trend}`
-    : 'Aligned with Macro Trend';
-
-  return `
-🚨 [EXNESS ${symbol} SNIPER SIGNAL]
-🎯 คำสั่งคัดพิเศษ: ${dirEmoji}
-🏆 เกรดสัญญาณ: ${profitGrade}
-📊 ชั้นที่ 1 (Confluence): ${confluence.totalScore}% (ผ่าน > ${confluence.threshold}%)
-🛡️ ชั้นที่ 2 (Sniper Profit): ${sniperScore}% (คัดเฉพาะตัวทำกำไรสูง)
-━━━━━━━━━━━━━━━━━
-📋 ข้อมูลสำหรับนำไปวางใน Exness:
-• สินทรัพย์: ${symbol} (Gold vs US Dollar)
-• คำสั่ง: ${direction}
-• ราคาเข้าซื้อ (Entry): ${confluence.suggestedEntry.toFixed(3)}
-• ตัดขาดทุน (SL): ${confluence.suggestedSl.toFixed(3)} (${confluence.slPips} pips | เสี่ยง ${confluence.slRiskPercent}% <= 5%)
-• จุดทำกำไร (TP): ${confluence.suggestedTp.toFixed(3)} (${confluence.tpPips} pips | เป้ากำไร ${confluence.tpTargetPercent}% ~10%)
-• R:R Ratio: 1 : ${confluence.rrRatio}
-• ล็อตแนะนำ: ${lotSize} lot
-━━━━━━━━━━━━━━━━━
-🔎 ผลวิเคราะห์ชั้นที่ 2 (Anti-Spam Verified):
-• เทรนด์ใหญ่: ${htfSummary}
-• พื้นที่วิ่งทำกำไร (Runway): ${clearance} pips
-• เกณฑ์ความเสี่ยง: SL <= 5% & TP ~10% PASS
-━━━━━━━━━━━━━━━━━
-⚡ โบรกเกอร์: Exness (${accountNumber})
-⏱️ เวลาตรวจจับ: ${dateStr}`;
 }
 
 /**

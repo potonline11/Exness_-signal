@@ -1,12 +1,12 @@
 import React from 'react';
-import { Shield, Bell, Terminal, Volume2, VolumeX, DollarSign } from 'lucide-react';
-import { AccountState, UserSettings, LineEnvStatus, TelegramEnvStatus } from '../types/trading';
+import { Bell, Terminal, Volume2, VolumeX, DollarSign } from 'lucide-react';
+import { AccountState, UserSettings, TelegramEnvStatus } from '../types/trading';
 
 interface NavbarProps {
   account: AccountState;
   settings: UserSettings;
   onUpdateSettings: (settings: Partial<UserSettings>) => void;
-  onOpenLineModal: () => void;
+  onOpenTelegramModal: () => void;
   onOpenBridgeModal: () => void;
   onOpenRiskSettings: () => void;
   activeTab: 'terminal' | 'signal-station' | 'confluence' | 'history' | 'mql5';
@@ -14,7 +14,6 @@ interface NavbarProps {
   bid: number;
   ask: number;
   spreadPips: number;
-  lineEnvStatus?: LineEnvStatus;
   telegramEnvStatus?: TelegramEnvStatus;
 }
 
@@ -22,23 +21,18 @@ export const Navbar: React.FC<NavbarProps> = ({
   account,
   settings,
   onUpdateSettings,
-  onOpenLineModal,
+  onOpenTelegramModal,
   onOpenBridgeModal,
   activeTab,
   setActiveTab,
   bid,
   ask,
   spreadPips,
-  lineEnvStatus,
   telegramEnvStatus
 }) => {
-  const isLineConnected = Boolean(
-    (settings.lineChannelAccessToken && settings.lineUserId) || lineEnvStatus?.configuredViaEnv
-  );
   const isTelegramConnected = Boolean(
     (settings.telegramBotToken && settings.telegramChatId) || telegramEnvStatus?.configuredViaEnv
   );
-  const hasAnyChannel = isLineConnected || isTelegramConnected;
   return (
     <header className="border-b border-slate-800 bg-slate-950 px-4 lg:px-6 py-3 shrink-0">
       <div className="flex items-center justify-between gap-8 max-w-[1700px] mx-auto">
@@ -74,8 +68,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             }`}
           >
             <span>Signal to Exness</span>
-            <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded font-bold">
-              LINE
+            <span className="text-[10px] bg-sky-500/20 text-sky-300 border border-sky-500/30 px-1.5 py-0.2 rounded font-bold">
+              TG
             </span>
           </button>
           <button
@@ -149,24 +143,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>MT5 Bridge</span>
           </button>
 
-          {/* Primary Action Button: LINE OA & Telegram Group Settings */}
+          {/* Primary Action Button: Telegram Group Settings */}
           <button
-            onClick={onOpenLineModal}
+            onClick={onOpenTelegramModal}
             className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer whitespace-nowrap ${
-              hasAnyChannel
-                ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm shadow-emerald-950'
-                : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30'
+              isTelegramConnected
+                ? 'bg-sky-600 hover:bg-sky-500 text-white shadow-sm shadow-sky-950'
+                : 'bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 border border-sky-500/30'
             }`}
           >
             <Bell className="w-3.5 h-3.5" />
             <span>
-              {isLineConnected && isTelegramConnected
-                ? 'LINE + Telegram เชื่อมต่อแล้ว'
-                : isTelegramConnected
-                ? 'Telegram เชื่อมต่อแล้ว'
-                : isLineConnected
-                ? 'LINE OA / ตั้งค่า TG'
-                : 'ตั้งค่า LINE / Telegram'}
+              {isTelegramConnected ? 'Telegram เชื่อมต่อแล้ว' : 'ตั้งค่า Telegram Group'}
             </span>
           </button>
         </div>

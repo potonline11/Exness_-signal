@@ -190,14 +190,10 @@ export interface UserSettings {
   autoBreakevenTriggerPips: number;
   trailingStopEnabled: boolean;
   trailingStopDistancePips: number;
-  lineChannelAccessToken: string;
-  lineUserId: string;
-  lineNotifyToken?: string;
-  lineNotifyEnabled: boolean;
   telegramBotToken: string;
   telegramChatId: string;
   telegramEnabled: boolean;
-  autoSendSignalToLine: boolean; // Auto dispatch signal when Layer 1 & Layer 2 match
+  autoSendSignalToTelegram: boolean; // Auto dispatch signal to Telegram when Layer 1 & Layer 2 match
   soundEnabled: boolean;
   showIndicators: {
     ema: boolean;
@@ -224,8 +220,7 @@ export interface TradeSignal {
   grade: 'A+' | 'A' | 'B';
   lotSize: number;
   status: 'ACTIVE' | 'HIT_TP' | 'HIT_SL' | 'EXPIRED';
-  sentToLine: boolean;
-  sentToTelegram?: boolean;
+  sentToTelegram: boolean;
 }
 
 export interface NotificationLog {
@@ -234,15 +229,8 @@ export interface NotificationLog {
   title: string;
   message: string;
   type: 'SIGNAL_BUY' | 'SIGNAL_SELL' | 'TP_HIT' | 'SL_HIT' | 'KILL_SWITCH' | 'TEST';
-  channel?: 'LINE' | 'TELEGRAM' | 'SYSTEM';
+  channel?: 'TELEGRAM' | 'SYSTEM';
   success: boolean;
-}
-
-export interface LineEnvStatus {
-  hasEnvToken: boolean;
-  hasEnvUserId: boolean;
-  configuredViaEnv: boolean;
-  maskedUserId: string;
 }
 
 export interface TelegramEnvStatus {

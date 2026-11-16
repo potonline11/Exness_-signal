@@ -7,7 +7,7 @@ interface ConfluencePanelProps {
   settings: UserSettings;
   onUpdateSettings: (settings: Partial<UserSettings>) => void;
   onExecuteTrade: (type: OrderType, reason: string) => void;
-  onSendLineNotify: (direction: OrderType, confluence: ConfluenceResult) => void;
+  onSendTelegramNotify: (direction: OrderType, confluence: ConfluenceResult) => void;
   onSimulateHighConfluence: () => void;
   bid: number;
   ask: number;
@@ -18,7 +18,7 @@ export const ConfluencePanel: React.FC<ConfluencePanelProps> = ({
   settings,
   onUpdateSettings,
   onExecuteTrade,
-  onSendLineNotify,
+  onSendTelegramNotify,
   onSimulateHighConfluence,
   bid,
   ask
@@ -182,7 +182,7 @@ export const ConfluencePanel: React.FC<ConfluencePanelProps> = ({
               <button
                 onClick={onSimulateHighConfluence}
                 className="text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-1 cursor-pointer font-medium"
-                title="ทดสอบจำลองให้ปัจจัยสอดคล้องเกิน 90% เพื่อดูการส่งแจ้งเตือน LINE และการเปิดออเดอร์อัตโนมัติ"
+                title="ทดสอบจำลองให้ปัจจัยสอดคล้องเกิน 90% เพื่อดูการส่งแจ้งเตือน Telegram และการเปิดออเดอร์อัตโนมัติ"
               >
                 <Sparkles className="w-3 h-3 text-amber-400" />
                 <span>ทดสอบสัญญาณ &gt; 90%</span>
@@ -203,13 +203,13 @@ export const ConfluencePanel: React.FC<ConfluencePanelProps> = ({
               )}
             </span>
 
-            {/* Quick Send to LINE button */}
+            {/* Quick Send to Telegram button */}
             <button
-              onClick={() => onSendLineNotify(confluence.direction === 'SELL' ? 'SELL' : 'BUY', confluence)}
-              className="text-[11px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1 cursor-pointer font-medium"
+              onClick={() => onSendTelegramNotify(confluence.direction === 'SELL' ? 'SELL' : 'BUY', confluence)}
+              className="text-[11px] text-sky-400 hover:text-sky-300 flex items-center gap-1 cursor-pointer font-medium"
             >
               <Send className="w-3 h-3" />
-              <span>ส่งแจ้งเตือน LINE ทันที</span>
+              <span>ส่งแจ้งเตือน Telegram ทันที</span>
             </button>
           </div>
 
